@@ -1,0 +1,15 @@
+# 采集的标定图片
+data/
+# 导出的标定结果
+output/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+# IDE
+.idea/
+.vscode/
+*.swp
+# venv
+venv/
+.venv/

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calib-tool"
+version = "0.1.0"
+description = "Desktop camera calibration tool (Qt + OpenCV)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pypylon>=4.0.0",
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0,<2.1",
+    "PySide6>=6.5.0",
+    "pyqtgraph>=0.13.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+calib-tool = "calib.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

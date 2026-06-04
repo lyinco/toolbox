@@ -1,0 +1,29 @@
+pattern:
+  pattern_type: chessboard       # chessboard | charuco | circle_grid
+  rows: 8                        # 内角点行数
+  cols: 11                       # 内角点列数
+  square_size_mm: 20.0           # 方格边长 (mm)
+
+acquisition:
+  strategy: simple               # simple | coverage
+  target_count: 20               # 目标采集张数
+  min_interval_ms: 500           # 最小采集间隔
+  blur_threshold: 100.0          # 拉普拉斯方差模糊阈值
+  coverage_min_samples: 15       # coverage 策略最少样本数
+
+calibration:
+  fix_principal_point: false
+  fix_aspect_ratio: true
+  zero_tangent_dist: false
+  max_iter: 30
+  eps: 1.0e-6
+
+ui:
+  window_title: "CalibTool"
+  window_width: 1280
+  window_height: 800
+  preview_max_fps: 30
+
+export:
+  output_dir: ""                 # 空 = 程序同级的 output/
+  default_format: json           # json | yaml

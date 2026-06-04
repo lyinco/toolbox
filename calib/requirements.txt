@@ -1,0 +1,7 @@
+# 推荐: pip install -e .  （依赖以 pyproject.toml 为准）
+pypylon>=4.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0,<2.1
+PySide6>=6.5.0
+pyqtgraph>=0.13.0
+PyYAML>=6.0
