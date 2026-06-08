@@ -47,8 +47,18 @@ class CalibrationSession:
         rows: int,
         cols: int,
         square_size_mm: float,
+        marker_length_mm: Optional[float] = None,
+        dictionary_id: Optional[int] = None,
     ) -> CalibPatternBase:
-        self.pattern = PatternFactory.create(pattern_type, rows, cols, square_size_mm)
+        kwargs = {}
+        if pattern_type.lower() == "charuco":
+            if marker_length_mm is not None:
+                kwargs["marker_length_mm"] = marker_length_mm
+            if dictionary_id is not None:
+                kwargs["dictionary_id"] = dictionary_id
+        self.pattern = PatternFactory.create(
+            pattern_type, rows, cols, square_size_mm, **kwargs
+        )
         return self.pattern
 
     def create_acquisition_strategy(self) -> AcquisitionStrategy:

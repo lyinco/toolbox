@@ -16,6 +16,8 @@ class PatternConfig:
     rows: int = 8
     cols: int = 11
     square_size_mm: float = 20.0
+    marker_length_mm: float = 15.0
+    aruco_dictionary: str = "DICT_4X4_50"
 
 
 @dataclass

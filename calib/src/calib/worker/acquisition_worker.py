@@ -1,5 +1,5 @@
 """自动采集控制器（运行于独立 QThread，避免阻塞 UI）。"""
-
+import cv2
 from typing import Optional
 
 import numpy as np
@@ -53,9 +53,14 @@ class AcquisitionController(QObject):
 
         raw = frame
         display = frame.copy()
-        corners, _ = self._pattern.detect(raw)
 
-        if corners is not None:
+        raw = cv2.imread('tests/data/charuo.jpg')
+        print('process_frame: raw shape:', raw.shape)
+        corners, cids = self._pattern.detect(raw)
+
+        print('detected corners:', corners)
+        print('detected cids:', cids)
+        if cids is not None:
             display = self._pattern.draw(display, corners)
 
         if self._strategy.should_acquire(raw, corners):

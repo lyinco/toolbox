@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         left_panel.addWidget(self._image_viewer)
 
         right_panel = QVBoxLayout()
-        self._pattern_selector = PatternSelector()
+        self._pattern_selector = PatternSelector(self._config.pattern)
         right_panel.addWidget(self._pattern_selector)
 
         self._camera_panel = CameraPanel()
@@ -109,12 +109,26 @@ class MainWindow(QMainWindow):
             return
 
         ptype = self._pattern_selector.selected_type()
-        self._session.create_pattern(
-            ptype,
-            self._pattern_selector.rows(),
-            self._pattern_selector.cols(),
-            self._pattern_selector.square_size(),
-        )
+        try:
+            if ptype == "charuco":
+                self._session.create_pattern(
+                    ptype,
+                    self._pattern_selector.rows(),
+                    self._pattern_selector.cols(),
+                    self._pattern_selector.square_size(),
+                    marker_length_mm=self._pattern_selector.marker_length_mm(),
+                    dictionary_id=self._pattern_selector.aruco_dictionary_id(),
+                )
+            else:
+                self._session.create_pattern(
+                    ptype,
+                    self._pattern_selector.rows(),
+                    self._pattern_selector.cols(),
+                    self._pattern_selector.square_size(),
+                )
+        except ValueError as e:
+            QMessageBox.warning(self, "标定板参数错误", str(e))
+            return
         strategy = self._session.create_acquisition_strategy()
 
         self._camera_panel.start_acquisition(self._session.pattern, strategy)

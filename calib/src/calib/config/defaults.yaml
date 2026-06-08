@@ -3,6 +3,8 @@ pattern:
   rows: 8                        # 内角点行数
   cols: 11                       # 内角点列数
   square_size_mm: 20.0           # 方格边长 (mm)
+  marker_length_mm: 15.0         # ChArUco marker 边长 (mm)
+  aruco_dictionary: DICT_4X4_50  # ChArUco ArUco 字典
 
 acquisition:
   strategy: simple               # simple | coverage
