@@ -7,6 +7,44 @@ from realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 import torch
 import numpy as np
+from PIL import Image
+
+
+def pillow2cv(image_pil):
+    opencv_img = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+    return opencv_img
+
+def cv2pillow(image_cv):
+    pil_img = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+    return pil_img
+
+
+def scale_image_cv2(image, canv_width, canv_height):
+    width, height = image.shape[:2]
+    scale_x = canv_width / width
+    scale_y = canv_height / height
+
+    scale = min(scale_x, scale_y)
+    tar_width = int(scale * width)
+    tar_height = int(scale * height)
+    tar_image = cv2.resize(image, (tar_width, tar_height))
+    return tar_image, tar_width, tar_height
+
+def scale_image_pil(image_pil, canv_width, canv_height):
+    """
+    PIL 图片进行缩放
+    """
+    width, height = image_pil.size
+    scale_x = canv_width / width
+    scale_y = canv_height / height
+
+    scale = min(scale_x, scale_y)
+    tar_width = int(scale * width)
+    tar_height = int(scale * height)
+
+    tar_image = image_pil.resize((tar_width, tar_height), Image.Resampling.LANCZOS)
+    return tar_image, tar_width, tar_height
+
 
 def affinite_image(image, p1, p2, p3, p4):
     """
@@ -36,7 +74,53 @@ def affinite_image(image, p1, p2, p3, p4):
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
     # 透视变换
     result = cv2.warpPerspective(image, M, (width, height))
+    return result, width, height
+
+
+def clahe_image(image):
+    """
+    CLAHE（提升局部对比度） 后 轻微去噪
+    """
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(
+        clipLimit=3.0,
+        tileGridSize=(8, 8)
+    )
+    l = clahe.apply(l)
+    lab = cv2.merge([l, a, b])
+    img_clahe = cv2.cvtColor(
+        lab,
+        cv2.COLOR_LAB2BGR
+    )
+
+    img_denoise = cv2.bilateralFilter(
+        img_clahe,
+        d=7,
+        sigmaColor=50,
+        sigmaSpace=50
+    )
+    return img_denoise
+
+
+def unsharp_mask(image):
+    blur = cv2.GaussianBlur(image, (0, 0), 5)
+    highpass = cv2.subtract(image, blur)
+    result = cv2.addWeighted(
+        image,
+        1.0,
+        highpass,
+        2.0,
+        0
+    )
     return result
+
+
+def clarify_image_flow(image):
+    # img_denoise = clahe_image(image)
+    rsr_image = clarify_image(image)
+    final = unsharp_mask(rsr_image)
+    return final
 
 
 def clarify_image(image, output_path=None, weights_path='F:/AI_MODELS/realesr/RealESRGAN_x4plus.pth'):
@@ -74,9 +158,6 @@ def clarify_image(image, output_path=None, weights_path='F:/AI_MODELS/realesr/Re
 
     if output_path:
         cv2.imwrite(output_path, output)
-
-    cv2.imshow('', image)
-    cv2.waitKey(0)
     return output
 
 
@@ -142,6 +223,7 @@ def split_and_clarify_image(image_path, output_images_path, weights_path='F:/AI_
 
     print("视频处理完成")
 
+
 if __name__ == "__main__":
 
     # input_image_path = 'F:/ftp/images/20260614110327.jpg'  # 替换为你的输入图片路径
@@ -149,12 +231,16 @@ if __name__ == "__main__":
     # image= cv2.imread(input_image_path)
     # clarify_image(image, output_image_path)
 
-    image_path = '树下诞生-A.JPG'
-    p1 = [241, 1529]
-    p2 = [3677, 1425]
-    p3 = [3877, 2257]
-    p4 = [0, 2225]
+    # image_path = '树下诞生-A.JPG'
+    # p1 = [241, 1529]
+    # p2 = [3677, 1425]
+    # p3 = [3877, 2257]
+    # p4 = [0, 2225]
+    # image = cv2.imread(image_path)
+    # affinite_image(image, p1, p2, p3, p4)
+
+    image_path = 'tt.png'
     image = cv2.imread(image_path)
-    affinite_image(image, p1, p2, p3, p4)
+    clarify_image(image, "upscale.png")
 
 
