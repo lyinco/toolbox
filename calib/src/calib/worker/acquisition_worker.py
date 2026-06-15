@@ -53,8 +53,7 @@ class AcquisitionController(QObject):
 
         raw = frame
         display = frame.copy()
-
-        raw = cv2.imread('tests/data/charuo.jpg')
+        cv2.imwrite('/Users/lingcai/Documents/git_src/toolbox/calib/data/charuco.jpg', raw)
         print('process_frame: raw shape:', raw.shape)
         corners, cids = self._pattern.detect(raw)
 
