@@ -123,7 +123,7 @@ def clarify_image_flow(image):
     return final
 
 
-def clarify_image(image, output_path=None, weights_path='F:/AI_MODELS/realesr/RealESRGAN_x4plus.pth'):
+def clarify_image(image, output_path=None, weights_path='models/RealESRGAN_x4plus.pth'):
     """
     将图片清晰放大4倍
     """
