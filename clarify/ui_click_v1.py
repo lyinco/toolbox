@@ -1,7 +1,7 @@
 import cv2
 import threading
 import tkinter as tk
-from tkinter import Listbox, MULTIPLE, Button, Label, Frame, filedialog
+from tkinter import ttk, Listbox, MULTIPLE, Button, Label, Frame, filedialog, messagebox
 import numpy as np
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
@@ -9,76 +9,107 @@ from video_clarify import scale_image_pil, affinite_image, cv2pillow, pillow2cv,
 
 # ========== 全局数据结构 ==========
 points_mouse = []
-points_pixel = []  # 存储点的列表，每个元素是(x, y)
-image_path = '' # 选中的图片路径
-img_original = None  # 原始图像
-img_display = None  # 显示用的图像副本
-img_processed = None
-scale_x = 1
-scale_y = 1
-image_topx = 0
-image_topy = 0
-window_name = "Image Annotation Tool"
-error_message = ''
+points_pixel = []          # 存储原始图像上的点坐标
+image_path = ''            # 当前图片路径
+img_original = None        # 原始图像 (PIL)
+img_display = None         # 显示用的图像副本
+img_processed = None       # 处理后的图像
+scale_x = 1.0              # 显示缩放比例 X
+scale_y = 1.0              # 显示缩放比例 Y
+image_topx = 0             # 图像在 Canvas 中的左上角 X 偏移
+image_topy = 0             # 图像在 Canvas 中的左上角 Y 偏移
+error_message = ''         # 错误提示信息
 
-## UI控件
+# UI 控件引用
 listbox = None
 canvas = None
+status_label = None        # 状态栏标签
+error_label = None         # 错误信息标签
+
+# 固定尺寸 (窗口禁止缩放，保证坐标映射正确)
 canvas_width = 1000
 canvas_height = 600
 window_width = 1300
 window_height = 700
 
+# ========== 辅助函数：刷新主显示区 ==========
+def refresh_main_display(new_image):
+    """重新加载主显示区的图像，重置缩放和点集"""
+    global img_original, scale_x, scale_y, image_topx, image_topy, points_pixel, points_mouse, canvas
 
-# ========== OpenCV 鼠标回调函数 ==========
+    img_original = new_image.copy()
+    points_pixel.clear()
+    points_mouse.clear()
+    update_listbox()
 
+    # 计算缩放比例并显示
+    org_width, org_height = img_original.size
+    resized_image, resize_w, resize_h = scale_image_pil(img_original, canvas_width, canvas_height)
+    scale_x = resize_w / org_width
+    scale_y = resize_h / org_height
+    display_photo = ImageTk.PhotoImage(resized_image)
+
+    canvas.delete("all")
+    canvas.update_idletasks()
+    cx = canvas.winfo_width() // 2
+    cy = canvas.winfo_height() // 2
+    canvas.create_image(cx, cy, anchor=tk.CENTER, image=display_photo)
+    canvas.config(scrollregion=(0, 0, resize_w, resize_h))
+    canvas.image = display_photo
+
+    image_topx = cx - resize_w // 2
+    image_topy = cy - resize_h // 2
+
+    update_status_message()
+
+def update_status_message():
+    """更新状态栏信息"""
+    if status_label:
+        status_label.config(text=f"当前点数: {len(points_pixel)}   |   图片: {image_path.split('/')[-1] if image_path else '无'}")
+
+# ========== 鼠标与显示 ==========
 def on_canvas_click(event):
     global canvas, img_display, points_mouse, points_pixel, image_topx, image_topy
 
-    if event.num == 1:  # 左键
+    if event.num == 1:  # 左键添加点
         canvas_x = event.x - image_topx
         canvas_y = event.y - image_topy
-        # 将显示坐标映射回原始图片坐标
+        # 边界检查
+        if canvas_x < 0 or canvas_y < 0 or canvas_x > canvas.winfo_width() or canvas_y > canvas.winfo_height():
+            return
         original_x = int(canvas_x / scale_x)
         original_y = int(canvas_y / scale_y)
 
-        print(f'selected point: {canvas_x, canvas_y} {original_x, original_y}, {scale_x, scale_y}')
-
         points_mouse.append((canvas_x, canvas_y))
         points_pixel.append((original_x, original_y))
-        # 刷新显示
         update_display()
-        # 刷新右侧列表框
         update_listbox()
-
-    elif event.num == 3:  # 右键
-        print(f"右键点击: ({event.x}, {event.y})")
-    else:
-        print('other press')
-
+        update_status_message()
+    elif event.num == 3:  # 右键（预留）
+        pass
 
 def update_display():
-    """在图像上绘制所有红色的圆圈，并显示"""
-    global img_display, img_original, points_pixel, canvas_width, canvas_height
+    """在图像上绘制所有点并刷新 Canvas"""
+    global img_display, img_original, points_pixel, canvas
+
     if img_original is None:
         return
 
-    org_image = img_original.copy()
-    draw = ImageDraw.Draw(org_image)
+    # 在原始图像的副本上绘制
+    draw_img = img_original.copy()
+    draw = ImageDraw.Draw(draw_img)
     radius = 5
-    font = ImageFont.load_default()
-    fill_color = (255, 0, 0)  # RGB 红色
+    try:
+        font = ImageFont.truetype("arial.ttf", 12)
+    except:
+        font = ImageFont.load_default()
+
     for (x, y) in points_pixel:
-        draw.ellipse(
-            [x - radius, y - radius, x + radius, y + radius],
-            fill='red',
-            outline=None
-        )
-        text = f'({x}, {y})'
-        draw.text((x + 5, y - 5), text, fill=fill_color, font=font)
+        draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill='red', outline='white')
+        draw.text((x + 5, y - 5), f"({x},{y})", fill='yellow', font=font)
 
-    tar_image, tar_width, tar_height = scale_image_pil(org_image, canvas_width, canvas_height)
-
+    # 缩放并显示
+    tar_image, tar_width, tar_height = scale_image_pil(draw_img, canvas_width, canvas_height)
     display_photo = ImageTk.PhotoImage(tar_image)
 
     canvas.delete("all")
@@ -86,210 +117,179 @@ def update_display():
     cx = canvas.winfo_width() // 2
     cy = canvas.winfo_height() // 2
     canvas.create_image(cx, cy, anchor=tk.CENTER, image=display_photo)
-    canvas.config(scrollregion=(0, 0, tar_width, tar_height ))  # 可选：支持滚动区域
+    canvas.config(scrollregion=(0, 0, tar_width, tar_height))
     canvas.image = display_photo
 
-
-# ========== Tkinter GUI 部分 ==========
+# ========== 右侧控制逻辑 ==========
 def select_image():
-    global canvas, image_path, img_original, scale_y, scale_x, points_mouse, points_pixel, image_topx, image_topy
     file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
     if file_path:
+        global image_path
         image_path = file_path
-        img_original = Image.open(file_path)
-        org_width, org_height = img_original.size
-
-        # 注意：初次调用时 Canvas 可能还未完成布局，需要强制更新一下
-        canvas.update_idletasks()
-        resized_image, resize_w, resize_h = scale_image_pil(img_original, canvas_width, canvas_height)
-        scale_x = resize_w / org_width
-        scale_y = resize_h / org_height
-        display_photo = ImageTk.PhotoImage(resized_image)
-
-        # 清空 Canvas 之前的内容，并显示新图片
-        canvas.delete("all")
-        canvas.update_idletasks()
-        cx = canvas.winfo_width() // 2
-        cy = canvas.winfo_height() // 2
-
-        canvas.create_image(cx, cy, anchor=tk.CENTER, image=display_photo)
-        canvas.config(scrollregion=(0, 0, resize_w, resize_h))  # 可选：支持滚动区域
-        canvas.image = display_photo
-
-        image_topx = cx - resize_w // 2
-        image_topy = cy - resize_h // 2
-
-        # 清空之前的点集
-        points_mouse.clear()
-        points_pixel.clear()
-
+        img = Image.open(file_path)
+        refresh_main_display(img)
 
 def update_listbox():
-    """刷新右侧列表框，显示所有点的坐标"""
+    """刷新右侧点列表"""
     global listbox
     listbox.delete(0, tk.END)
     for i, (x, y) in enumerate(points_pixel):
-        listbox.insert(tk.END, f"点 {i + 1}: ({x}, {y})")
-
+        listbox.insert(tk.END, f"点 {i+1}: ({x}, {y})")
 
 def delete_selected_points():
-    """删除列表中选中的点"""
     global points_pixel, listbox
-    selected_indices = listbox.curselection()
-    # 从后往前删除，避免索引错乱
-    for idx in reversed(selected_indices):
+    selected = listbox.curselection()
+    for idx in reversed(selected):
         if idx < len(points_pixel):
             points_pixel.pop(idx)
     update_listbox()
     update_display()
-
+    update_status_message()
+    show_temporary_message(f"已删除 {len(selected)} 个点")
 
 def clear_all_points():
-    """一键清除所有点"""
-    points_mouse.clear()
     points_pixel.clear()
+    points_mouse.clear()
     update_listbox()
     update_display()
-
-
-def save_image(save_and_update = 1):
-    """
-    保存处理后的图片
-    save_and_update = 1, 保存图片到文件
-    save_and_update = 2  仅更新主页图片
-    save_and_update = 3 同时保存、更新主页图片
-    """
-    global img_processed, img_original
-
-    if save_and_update == 2 or save_and_update == 3:
-        img_original = img_processed
-        clear_all_points()
-        update_display()
-
-    if save_and_update == 1 or save_and_update == 3:
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".bmp",
-            filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All files", "*.*")]
-        )
-        if file_path:
-            img_processed.save(file_path)
-
-
+    update_status_message()
+    show_temporary_message("所有点已清除")
 
 def skew_correction():
-
     global img_processed, img_original, points_pixel, error_message
-
-    img_processed = img_original
-    image_cv2 = pillow2cv(img_processed)
-    if len(points_pixel) !=4:
-        error_message = '请选择选四个点！！！'
+    if len(points_pixel) != 4:
+        messagebox.showerror("错误", "请先选择四个点进行校正！")
         return
 
-    skew_image_cv2, width, height = affinite_image(image_cv2, points_pixel[0], points_pixel[1], points_pixel[2], points_pixel[3])
-    img_processed = cv2pillow(skew_image_cv2)
-    open_sub_win(img_processed)
-
+    img_cv = pillow2cv(img_original)
+    skew_cv, w, h = affinite_image(img_cv, points_pixel[0], points_pixel[1], points_pixel[2], points_pixel[3])
+    img_processed = cv2pillow(skew_cv)
+    open_sub_win(img_processed, "校正后的图像")
 
 def enhance_clarify():
     global img_original, img_processed
-    img_processed = img_original
-    image_cv2 = pillow2cv(img_processed)
+    img_cv = pillow2cv(img_original)
+    enhanced_cv = clarify_image_flow(img_cv)
+    img_processed = cv2pillow(enhanced_cv)
+    open_sub_win(img_processed, "增强后的图像")
 
-    image_enhance_cv = clarify_image_flow(image_cv2)
-    image_enhance_pil = cv2pillow(image_enhance_cv)
-    img_processed = image_enhance_pil
-    open_sub_win(img_processed)
+def save_image(save_mode=1, preview_image=None):
+    """
+    save_mode: 1=仅保存文件, 2=仅更新主图, 3=保存并更新
+    preview_image: 如果传入则保存此图像，否则保存 img_processed
+    """
+    global img_original, img_processed
+    target_img = preview_image if preview_image else img_processed
+    if target_img is None:
+        messagebox.showwarning("警告", "没有可保存的图像")
+        return
 
+    if save_mode == 2 or save_mode == 3:
+        refresh_main_display(target_img)
+        show_temporary_message("已更新主图")
 
-def open_sub_win(image_pil):
+    if save_mode == 1 or save_mode == 3:
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG 文件", "*.png"), ("JPEG 文件", "*.jpg"), ("所有文件", "*.*")]
+        )
+        if file_path:
+            target_img.save(file_path)
+            show_temporary_message(f"已保存至: {file_path}")
 
-    global canvas_width, canvas_height, window_width, window_height
+def show_temporary_message(msg, duration=2000):
+    """在状态栏短暂显示消息，2秒后恢复"""
+    if status_label:
+        old_text = status_label.cget("text")
+        status_label.config(text=msg)
+        root.after(duration, lambda: status_label.config(text=old_text))
 
-    display_image, resize_width, resize_height = scale_image_pil(image_pil, canvas_width, canvas_height)
+def open_sub_win(image_pil, title="处理结果"):
+    """弹出子窗口预览并保存/更新主图"""
+    sub = tk.Toplevel()
+    sub.title(title)
+    sub.geometry(f"{canvas_width}x{canvas_height+80}")
+    sub.resizable(False, False)
+    sub.configure(bg='#f0f0f0')
 
-    new_win = tk.Toplevel()
-    new_win.title('校正后的图像')
-    win_width = canvas_width
-    win_height = canvas_height + 100
-    screen_width = new_win.winfo_screenwidth()
-    screen_height = new_win.winfo_screenheight()
-    print(f'screen_width, screen_width = {screen_width, screen_height}')
-    win_x = (screen_width - win_width) // 2  # 重命名为 win_x
-    win_y = (screen_height - win_height) // 2  # 重命名为 win_y
-    new_win.geometry(f"{win_width}x{win_height}+{win_x}+{win_y}")
+    # 显示图像
+    display_img, w, h = scale_image_pil(image_pil, canvas_width, canvas_height)
+    photo = ImageTk.PhotoImage(display_img)
+    img_canvas = tk.Canvas(sub, width=canvas_width, height=canvas_height, bg='#e0e0e0', highlightthickness=0)
+    img_canvas.pack(pady=10)
+    img_canvas.create_image(canvas_width//2, canvas_height//2, anchor=tk.CENTER, image=photo)
+    img_canvas.image = photo
 
-    print(f'new win geometry = {win_width}x{win_height}+{win_x}+{win_y}')
-    frame = tk.Frame(new_win)
-    frame.pack(fill=tk.BOTH, expand=True)
-    canvas = tk.Canvas(frame,
-                       width=canvas_width,
-                       height=canvas_height)
-    canvas.pack(fill=tk.BOTH, expand=True)  # 添加这一行
+    # 按钮栏
+    btn_frame = tk.Frame(sub, bg='#f0f0f0')
+    btn_frame.pack(pady=10)
+    style = {'font': ('微软雅黑', 10), 'width': 18, 'padx': 5, 'pady': 3}
+    tk.Button(btn_frame, text="💾 保存图片", command=lambda: save_image(1, image_pil), **style).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="🖼️ 更新主图", command=lambda: save_image(2, image_pil), **style).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="📁 保存并更新", command=lambda: save_image(3, image_pil), **style).pack(side=tk.LEFT, padx=5)
 
-    ## 添加保存按钮
-    # 按钮框架靠下（保持不变）
-    button_frame = tk.Frame(new_win)
-    button_frame.pack(side=tk.BOTTOM, pady=10)
-    btn_save1 = tk.Button(button_frame, text="保存图片", command=lambda: save_image(1))
-    btn_save1.pack(side=tk.LEFT, padx=5)
-    btn_save2 = tk.Button(button_frame, text="更新主图片", command=lambda: save_image(2))
-    btn_save2.pack(side=tk.LEFT, padx=5)
-    btn_save3 = tk.Button(button_frame, text="保存图片并更新主图片", command=lambda: save_image(3))
-    btn_save3.pack(side=tk.LEFT, padx=5)
-
-
-    # 显示图像 - 修正部分
-    canvas.delete("all")
-    canvas.update_idletasks()  # 确保尺寸已计算
-    cx = canvas_width // 2
-    cy = (canvas_height + 100) // 2
-    print(f'cx, cy = {cx, cy}')
-    photo = ImageTk.PhotoImage(display_image)
-    canvas.create_image(cx, cy, anchor=tk.CENTER, image=photo)
-    canvas.config(scrollregion=(0, 0, resize_width, resize_height))  # 只需一次
-    canvas.image = photo
-
-
-
+# ========== 界面初始化 ==========
 def ui_init():
-    global listbox, canvas, canvas_width, canvas_height, window_width, window_height
+    global listbox, canvas, status_label, error_label, root
 
-    # 创建Tkinter主窗口（右侧控制面板）
     root = tk.Tk()
-    # 获取屏幕尺寸
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    root.title("点坐标管理面板")
-    window_width = window_width # 1300
-    window_height = window_height # 700
-    # 计算窗口位置，使其居中
-    x_pos = (screen_width - window_width) // 2
-    y_pos = (screen_height - window_height) // 2
-    # 设置窗口几何形状：宽度x高度 + x偏移 + y偏移
-    root.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+    root.title("📷 智能图像标注与校正工具")
+    root.geometry(f"{window_width}x{window_height}")
+    root.resizable(False, False)
+    root.configure(bg='#2c3e50')
 
-    # 界面布局
-    # 创建一个 Canvas 组件，作为图片框
-    canvas = tk.Canvas(root, width=canvas_width, height=canvas_height, bg='gray')
-    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    # ========== 左侧图像区域 ==========
+    left_frame = tk.Frame(root, bg='#34495e', relief=tk.GROOVE, bd=2)
+    left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    canvas = tk.Canvas(left_frame, width=canvas_width, height=canvas_height, bg='#2c3e50', highlightthickness=0)
+    canvas.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     canvas.bind("<Button-1>", on_canvas_click)
 
-    # 右侧控制面板（暂时放一个按钮，你可以继续添加列表等）
-    right_frame = tk.Frame(root, width=200, height=500, bg='#f0f0f0')
-    right_frame.pack(side=tk.RIGHT, padx=10, pady=10, fill=tk.Y)
+    # ========== 右侧控制面板 ==========
+    right_frame = tk.Frame(root, bg='#ecf0f1', width=280)
+    right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 10), pady=10)
+    right_frame.pack_propagate(False)
 
-    listbox = Listbox(right_frame, height=13, selectmode=MULTIPLE, font=("Arial", 10))
-    listbox.pack(fill=tk.BOTH, expand=False, pady=5, anchor='w')
-    Button(right_frame, text="打开图片", command=select_image, bg="green", fg="white").pack(pady=5, anchor='w')
-    Button(right_frame, text="删除选中点", command=delete_selected_points, bg="red", fg="white").pack(pady=5, anchor='w')
-    Button(right_frame, text="全部清除", command=clear_all_points).pack(pady=5, anchor='w')
-    Button(right_frame, text="图片校正", command=skew_correction).pack(pady=5, anchor='w')
-    Button(right_frame, text="图片增强", command=enhance_clarify).pack(pady=5, anchor='w')
+    # 标题
+    title_label = tk.Label(right_frame, text="✨ 控制中心", font=('微软雅黑', 14, 'bold'), bg='#ecf0f1', fg='#2c3e50')
+    title_label.pack(pady=(10, 5))
+
+    # 点列表管理
+    list_frame = tk.LabelFrame(right_frame, text="📌 标记点列表", font=('微软雅黑', 10), bg='#ecf0f1', fg='#2c3e50')
+    list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+    listbox = Listbox(list_frame, height=12, font=('Consolas', 10), selectbackground='#3498db',
+                      selectforeground='white', bg='white', fg='#2c3e50', relief=tk.FLAT)
+    listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+    scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    listbox.config(yscrollcommand=scrollbar.set)
+
+    # 按钮样式
+    btn_style = {'font': ('微软雅黑', 9), 'width': 20, 'pady': 4, 'relief': tk.RAISED, 'bd': 1}
+    btn_frame1 = tk.Frame(right_frame, bg='#ecf0f1')
+    btn_frame1.pack(pady=5)
+
+    tk.Button(btn_frame1, text="📂 打开图片", command=select_image, bg='#3498db', fg='white', **btn_style).pack(pady=2)
+    tk.Button(btn_frame1, text="🗑️ 删除选中点", command=delete_selected_points, bg='#e74c3c', fg='white', **btn_style).pack(pady=2)
+    tk.Button(btn_frame1, text="🧹 全部清除", command=clear_all_points, bg='#95a5a6', fg='white', **btn_style).pack(pady=2)
+
+    # 校正与增强分组
+    proc_frame = tk.LabelFrame(right_frame, text="⚙️ 图像处理", font=('微软雅黑', 10), bg='#ecf0f1', fg='#2c3e50')
+    proc_frame.pack(fill=tk.X, padx=10, pady=10)
+
+    tk.Button(proc_frame, text="🔧 透视校正 (需4点)", command=skew_correction, bg='#9b59b6', fg='white', **btn_style).pack(pady=5, padx=5)
+    tk.Button(proc_frame, text="✨ 图像清晰度增强", command=enhance_clarify, bg='#1abc9c', fg='white', **btn_style).pack(pady=5, padx=5)
+
+    # 状态栏
+    status_frame = tk.Frame(right_frame, bg='#ecf0f1', height=40)
+    status_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=10)
+    status_label = tk.Label(status_frame, text="就绪", font=('微软雅黑', 9), bg='#ecf0f1', fg='#7f8c8d')
+    status_label.pack()
 
     root.mainloop()
-
-
 
 # ========== 主程序 ==========
 if __name__ == "__main__":
