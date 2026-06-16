@@ -393,7 +393,6 @@ def ui_init():
     global open_btn, delete_btn, clear_btn, process_label, skew_btn, enhance_btn, lang_btn
 
     # ========== 主窗体设置 ==========
-    # ========== 主窗体设置 ==========
     root = tk.Tk()
     root.title(TEXTS[current_lang]['window_title'])
     root.geometry(f"{window_width}x{window_height}")
