@@ -2,6 +2,7 @@
 将图片变清晰 -- 放大2倍
 """
 
+import sys, os
 import cv2
 from realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
@@ -9,6 +10,15 @@ import torch
 import numpy as np
 from PIL import Image
 
+def resource_path(relative_path):
+    """获取资源的绝对路径，兼容开发环境和 PyInstaller 打包后的 exe"""
+    try:
+        # PyInstaller 会将资源解压到临时目录，路径存储在 sys._MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # 开发环境中，使用当前工作目录（项目根目录）
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def pillow2cv(image_pil):
     opencv_img = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -123,7 +133,7 @@ def clarify_image_flow(image):
     return final
 
 
-def clarify_image(image, output_path=None, weights_path='models/RealESRGAN_x4plus.pth'):
+def clarify_image(image, output_path=None, weights_path=resource_path('models/RealESRGAN_x4plus.pth')):
     """
     将图片清晰放大4倍
     """
@@ -159,69 +169,6 @@ def clarify_image(image, output_path=None, weights_path='models/RealESRGAN_x4plu
     if output_path:
         cv2.imwrite(output_path, output)
     return output
-
-
-def split_and_clarify_image(image_path, output_images_path, weights_path='F:/AI_MODELS/realesr/RealESRGAN_x4plus.pth'):
-    
-    img = cv2.imread(image_path)
-    h, w = img.shape[:2]
-
-    video_w = 1920
-    video_h = 1080
-
-    fps = 30
-    duration = 30
-
-    frames = fps * duration
-
-    # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-    # writer = cv2.VideoWriter(
-    #     "scan.mp4",
-    #     fourcc,
-    #     fps,
-    #     (video_w, video_h)
-    # )
-
-    for i in range(frames):
-
-        # t = i / (frames - 1)
-        # t = i/(frames-1)
-        # t = 0.5 - 0.5*np.cos(np.pi*t)
-        t= i/(frames-1)
-
-        scale = 1.0 + 0.5*t
-
-        crop_w = int(video_w / scale)
-        crop_h = int(video_h / scale)
-        x = int(
-            t*(w-crop_w)
-        )
-        y = (h-crop_h)//2
-        crop = img[
-            y:y+crop_h,
-            x:x+crop_w
-        ]
-        frame = cv2.resize(
-            crop,
-            (video_w,video_h)
-        )
-
-        print(f'x={x} y={y} t={t:.4f}')
-
-        # crop = img[
-        #     0:video_h,
-        #     x:x+video_w
-        # ]
-
-        cv2.imshow("frame", frame)
-        cv2.waitKey(500)
-
-        # writer.write(crop)
-
-    # writer.release()
-
-    print("视频处理完成")
 
 
 if __name__ == "__main__":

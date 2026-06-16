@@ -1,5 +1,5 @@
 
-📷 智能图像标注与校正工具
+📷 智能图像标注与校正工具V1.0
 
 一款专业、易用的图像处理桌面应用，专为需要精确标注、透视校正和图像增强的用户打造。
 
@@ -27,6 +27,14 @@
 
 版本信息： 1.0.0
 开发者： lyinco
+
+电脑配置: 
+    | 组件	        | 💡 最低配置 (基础可用)        |	🚀 推荐配置 (流畅运行)
+    | 操作系统	    | Windows 10/11 64位         |	Windows 10/11 64位
+    | 处理器 (CPU)     |	Intel i5 或 AMD R5 系列   |	Intel i7 或 AMD R7 系列
+    | 内存 (RAM)	    |8 GB	                     |  16 GB 或更高
+    | 显卡 (GPU)	    | 可选。推荐NVIDIA GTX 1060 (6GB) 或更高 |	建议配备。NVIDIA RTX 2060 (6GB+) 或更高
+    | 硬盘空间	    |至少 10 GB 可用空间	| 建议 20 GB 或更多，SSD固态硬盘
 
 
 📷 Smart Image Annotation & Correction Tool
@@ -60,3 +68,11 @@ Highlights:
 
 Version: 1.0.0
 Developer: lyinco
+
+
+# BUILD
+    1. generate spec file: 
+        pyi-makespec --onefile --windowed ui_click.py 
+    2. pyinstaller --onefile --windowed --add-data "icons;icons" --add-data "models;models" ui_click.py
+    3. if failed, update spec file and then run pyinstaller ui_click.spec
+    4. pyinstaller --onedir --noconsole ui_click.py

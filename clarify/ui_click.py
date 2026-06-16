@@ -1,11 +1,8 @@
-import cv2
-import threading
 import tkinter as tk
-from tkinter import ttk, Listbox, MULTIPLE, Button, Label, Frame, filedialog, messagebox
-import numpy as np
+from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
-from video_clarify import scale_image_pil, affinite_image, cv2pillow, pillow2cv, clarify_image_flow
+from video_clarify import scale_image_pil, affinite_image, cv2pillow, pillow2cv, clarify_image_flow, resource_path
 
 # ========== 多语言文本库 ==========
 TEXTS = {
@@ -399,14 +396,14 @@ def ui_init():
     root.resizable(False, False)
 
     # 【光影核心 1】加载并铺设全局全屏渐变背景
-    bg_img_raw = Image.open("icons/bg_gradient.png")
+    bg_img_raw = Image.open(resource_path("icons/bg_gradient.png"))
     bg_image = ImageTk.PhotoImage(bg_img_raw)
     bg_label = tk.Label(root, image=bg_image)
     bg_label.place(x=0, y=0, relwidth=1, relheight=1)  # 铺满全场
 
     # 【光影核心 2】加载渐变按钮切图
-    img_btn_blue = ImageTk.PhotoImage(Image.open("icons/btn_blue.png"))
-    img_btn_cyan = ImageTk.PhotoImage(Image.open("icons/btn_cyan.png"))
+    img_btn_blue = ImageTk.PhotoImage(Image.open(resource_path("icons/btn_blue.png")))
+    img_btn_cyan = ImageTk.PhotoImage(Image.open(resource_path("icons/btn_cyan.png")))
 
     # ========== 左侧图像区域 ==========
     # 利用 highlightthickness 和 highlightbackground 模拟极细的悬浮科技边框
