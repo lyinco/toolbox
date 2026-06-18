@@ -1,3 +1,8 @@
+import os
+import shutil
+import threading
+import time
+from glob import glob
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
@@ -16,6 +21,7 @@ TEXTS = {
         'process_title': '⚙️ 图像处理',
         'skew_correct': '🔧 透视校正 (需4点)',
         'enhance': '✨ 图像清晰度增强',
+        'horz_video': '📷 生成视频',
         'save': '💾 保存图片',
         'update_main': '🖼️ 更新主图',
         'save_and_update': '📁 保存并更新',
@@ -29,6 +35,7 @@ TEXTS = {
         'update_success': '已更新主图',
         'subwin_title_correct': '校正后的图像',
         'subwin_title_enhance': '增强后的图像',
+        'subwin_title_video': '水平生成视频',
         'lang_switch': '🌐 English',
     },
     'en': {
@@ -41,6 +48,7 @@ TEXTS = {
         'process_title': '⚙️ Image Processing',
         'skew_correct': '🔧 4-Pt Correction', # Perspective Correction (4 pts)
         'enhance': '✨ Enhance Clarity',
+        'horz_video': '📷 generate video',
         'save': '💾 Save Image',
         'update_main': '🖼️ Update Main',
         'save_and_update': '📁 Save & Update',
@@ -54,6 +62,7 @@ TEXTS = {
         'update_success': 'Main image updated',
         'subwin_title_correct': 'Corrected Image',
         'subwin_title_enhance': 'Enhanced Image',
+        'subwin_title_video': 'Generated Video',
         'lang_switch': '🌐 中文',
     }
 }
@@ -94,6 +103,7 @@ clear_btn = None
 process_label = None
 skew_btn = None
 enhance_btn = None
+video_horz_btn = None
 lang_btn = None
 
 # 固定尺寸 (窗口禁止缩放，保证坐标映射正确)
@@ -126,6 +136,8 @@ def refresh_ui_language():
         skew_btn.config(text=TEXTS[current_lang]['skew_correct'])
     if enhance_btn:
         enhance_btn.config(text=TEXTS[current_lang]['enhance'])
+    if video_horz_btn:
+        enhance_btn.config(text=TEXTS[current_lang]['subwin_title_video'])
     if lang_btn:
         lang_btn.config(text=TEXTS[current_lang]['lang_switch'])
     if status_label:
@@ -292,6 +304,14 @@ def enhance_clarify():
     img_processed = cv2pillow(enhanced_cv)
     open_sub_win(img_processed, TEXTS[current_lang]['subwin_title_enhance'])
 
+
+def generate_video():
+    global img_original
+    open_sub_win_video(img_original, TEXTS[current_lang]['subwin_title_video'])
+
+
+
+
 def save_image(save_mode=1, preview_image=None):
     """
     save_mode: 1=仅保存文件, 2=仅更新主图, 3=保存并更新
@@ -314,6 +334,209 @@ def save_image(save_mode=1, preview_image=None):
         if file_path:
             target_img.save(file_path)
             show_temporary_message('save_success', file_path)
+
+
+
+
+def open_sub_win_video(image_pil, title):
+    # ---------- 5. 播放控制变量 ----------
+    ratio = 0.25
+    fps = 30
+    zoom_duration = 5
+    scan_duration = 30
+    codec = 'mp4v'
+    output_video = 'output.mp4'
+    frame_dir = os.path.dirname(os.path.abspath(__file__))
+    frame_dir = os.path.join(frame_dir, 'tmp')
+    total_frames = int(fps * zoom_duration) + int(fps * scan_duration)
+    current_idx = 0
+    play_after_id = None  # after 事件 ID，用于取消
+
+    # ---------- 6. 核心播放函数 ----------
+    def set_frame_files():
+
+        nonlocal current_idx
+        current_idx = 0
+        status_var.set("开始播放")
+        play_frame()
+
+    def play_frame():
+        nonlocal current_idx, play_after_id, frame_dir, total_frames
+        if current_idx >= total_frames:
+            # 播放结束，显示最后一帧或停止
+            status_var.set("播放完毕")
+            return
+
+        # 读取并显示当前帧
+        print(f'show: current_id = {current_idx} ')
+        img_path = os.path.join(frame_dir, f'{current_idx}.png') # frame_files[current_idx]
+        try:
+            while not os.path.join(img_path):
+                time.sleep(0.2)
+                print('sleep 0.2s')
+            pil_img = Image.open(img_path)
+            # 缩放至 Canvas 尺寸（保持比例）
+            pil_img.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(pil_img)
+            img_canvas.delete("all")
+            img_canvas.create_image(canvas_width // 2, canvas_height // 2,
+                                    anchor=tk.CENTER, image=photo)
+            img_canvas.image = photo  # 保持引用
+            # 更新状态
+            status_var.set(f"播放中 {current_idx + 1}/{total_frames}")
+        except Exception as e:
+            status_var.set(f"加载帧失败: {e}")
+
+        # 调度下一帧
+        delay = int(1000 / fps)  # 按设定帧率播放
+        current_idx += 1
+
+        play_after_id = sub.after(delay, play_frame)
+
+    # ---------- 7. 重新播放 ----------
+    def replay():
+        nonlocal current_idx, play_after_id
+        if play_after_id:
+            sub.after_cancel(play_after_id)
+            play_after_id = None
+        current_idx = 0
+        status_var.set("重新播放...")
+        play_frame()
+
+    # ---------- 8. 保存视频 ----------
+    def save_video():
+        # 弹出保存对话框
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".mp4",
+            filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")],
+            title="保存视频为"
+        )
+        if save_path:
+            # 检查 output_video 是否存在
+            if os.path.exists(output_video):
+                try:
+                    shutil.copy2(output_video, save_path)
+                    status_var.set(f"视频已保存至: {os.path.basename(save_path)}")
+                except Exception as e:
+                    status_var.set(f"保存失败: {e}")
+            else:
+                status_var.set("视频文件未生成，请先等待生成完成")
+
+    def update_canvas(frame_path, idx, total):
+        """主线程更新 Canvas 显示指定帧"""
+        try:
+            pil_img = Image.open(frame_path)
+            pil_img.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(pil_img)
+            img_canvas.delete("all")
+            img_canvas.create_image(canvas_width // 2, canvas_height // 2,
+                                    anchor=tk.CENTER, image=photo)
+            img_canvas.image = photo  # 保持引用
+            status_var.set(f"生成中 {idx + 1}/{total} 帧")
+        except Exception as e:
+            status_var.set(f"显示帧失败: {e}")
+
+
+    def on_frame_ready(frame_path, idx, total):
+        """生成线程每生成一帧调用此函数，传入帧路径和进度"""
+        # 必须通过 after 在主线程更新界面
+        sub.after(0, lambda: update_canvas(frame_path, idx, total))
+
+    def generate_video_task(image_pil):
+        from video_push_left2right import video_left2right
+        try:
+            image_cv = pillow2cv(image_pil)
+            # 调用修改后的 video_left2right，传入回调
+            video_left2right(
+                image=image_cv,
+                ratio=ratio,
+                fps=fps,
+                zoom_duration=zoom_duration,
+                scan_duration=scan_duration,
+                codec=codec,
+                output_video=output_video,
+                frame_dir=frame_dir,
+                on_frame_callback=on_frame_ready  # 关键：传入回调
+            )
+            # 生成完成后更新状态，并启用“重新播放”按钮
+            sub.after(0, lambda: status_var.set(f"生成完成，共 {total_frames} 帧"))
+            sub.after(0, lambda: btn_replay.config(state=tk.NORMAL))  # 启用按钮
+        except Exception as e:
+            sub.after(0, lambda: status_var.set(f"生成失败: {e}"))
+            sub.after(0, lambda: btn_replay.config(state=tk.NORMAL))
+
+    # 启动生成线程（不阻塞界面）
+    thread = threading.Thread(target=generate_video_task, args=(image_pil,), daemon=True)
+    thread.start()
+
+    """弹出子窗口预览并保存/更新主图（美化版）"""
+    sub = tk.Toplevel()
+    sub.title(title)
+    # 窗口大小：高度增加一些额外空间用于按钮和边距
+    win_width = canvas_width
+    win_height = canvas_height + 120
+    sub.geometry(f"{win_width}x{win_height}")
+    sub.resizable(False, False)
+    sub.configure(bg='#f5f5f5')  # 柔和的背景色
+
+    # 窗口居中（相对于主窗口）
+    root_x = root.winfo_x()
+    root_y = root.winfo_y()
+    root_w = root.winfo_width()
+    root_h = root.winfo_height()
+    x = root_x + (root_w - win_width) // 2
+    y = root_y + (root_h - win_height) // 2
+    sub.geometry(f"+{x}+{y}")
+
+    # 显示图像（添加浅边框）
+    photo = ImageTk.PhotoImage(image_pil)
+    img_canvas = tk.Canvas(sub, width=canvas_width, height=canvas_height,
+                           bg='#ffffff', highlightthickness=1, highlightbackground='#cccccc')
+    img_canvas.pack(pady=15, padx=15)
+
+    # 状态标签（显示进度或提示）
+    status_var = tk.StringVar(value="正在生成视频，请稍候...")
+    status_label = tk.Label(sub, textvariable=status_var, bg='#f5f5f5', font=('微软雅黑', 10))
+    status_label.pack(pady=(0, 5))
+
+    img_canvas.create_image(canvas_width//2, canvas_height//2, anchor=tk.CENTER, image=photo)
+    img_canvas.image = photo
+
+    # 按钮栏框架（增加阴影效果通过边框模拟）
+    btn_frame = tk.Frame(sub, bg='#f5f5f5')
+    btn_frame.pack(pady=10)
+
+    # 按钮样式（加大加粗字体，不同功能不同颜色）
+    btn_style_base = {'font': ('微软雅黑', 10, 'bold'), 'width': 16, 'pady': 6,
+                      'relief': tk.RAISED, 'bd': 2, 'cursor': 'hand2'}
+
+    # 重新播放按钮
+    btn_replay = tk.Button(btn_frame, text="重新播放", font=('微软雅黑', 10, 'bold'),
+                           bg='#3498db', fg='white', width=12, pady=6,
+                           command=lambda: replay())
+    btn_replay.pack(side=tk.LEFT, padx=8)
+
+    # 保存按钮（绿色）
+    btn_save = tk.Button(btn_frame, text="保存视频", font=('微软雅黑', 10, 'bold'),
+                         bg='#27ae60', fg='white', width=12, pady=6,
+                         command=lambda: save_video())
+    btn_save.pack(side=tk.LEFT, padx=8)
+
+    # 可选：添加一个简单的分隔线（视觉效果）
+    separator = tk.Frame(sub, height=2, bg='#cccccc')
+    separator.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+    # 关闭窗口时清理临时目录
+    def on_close():
+        if os.path.exists(frame_dir):
+            shutil.rmtree(frame_dir, ignore_errors=True)
+        sub.destroy()
+    sub.protocol("WM_DELETE_WINDOW", on_close)
+
+    # 绑定键盘 ESC 键关闭窗口
+    def close_win(event=None):
+        sub.destroy()
+    sub.bind('<Escape>', close_win)
 
 
 def open_sub_win(image_pil, title):
@@ -484,6 +707,10 @@ def ui_init():
 
     enhance_btn = tk.Button(proc_frame, image=img_btn_cyan, text=TEXTS[current_lang]['enhance'], command=enhance_clarify, **btn_img_style)
     enhance_btn.pack(pady=(0, 10), padx=10)
+
+    video_horz_btn = tk.Button(proc_frame, image=img_btn_cyan, text=TEXTS[current_lang]['horz_video'],
+                            command=generate_video, **btn_img_style)
+    video_horz_btn.pack(pady=(0, 10), padx=10)
 
     # 6. 底部状态栏 (极简呼吸小点)
     status_frame = tk.Frame(right_frame, bg=COLOR_PANEL_BG, height=25)

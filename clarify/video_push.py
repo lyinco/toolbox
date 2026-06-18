@@ -8,7 +8,7 @@
 
 import cv2
 
-def push_and_move(image, zoom = 2, frames = 250, fps = 30, size=None, out_mp4 = 'zoom_output.mp4'):
+def push_and_move(image, zoom = 2, frames = 250, fps = 30, out_mp4 = 'zoom_output.mp4'):
     """
     模拟镜头推进效果
     Args:
@@ -18,7 +18,6 @@ def push_and_move(image, zoom = 2, frames = 250, fps = 30, size=None, out_mp4 = 
         fps:输出视频的帧率，默认30
         size:输出视频尺寸（宽x高），如1280x720，不指定则使用原始尺寸
         out_mp4: 输出视频文件路径（或图片序列文件夹）
-
     Returns:
     """
 
